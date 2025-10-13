@@ -1,0 +1,15 @@
+# Visual Studio cache and temporary files
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+bin/
+obj/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Ignore other temporary files
+*.log
