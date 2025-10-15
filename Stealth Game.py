@@ -30,7 +30,7 @@ class Button:
         self.active = True
         self.cooldown = 0
     
-    def draw(self, screen):
+    def draw(self, screen, font):
         mouse_pos = pygame.mouse.get_pos()
         is_hover = self.rect.collidepoint(mouse_pos) and self.active
 
@@ -49,16 +49,16 @@ class Button:
             cooldown_text = font.render(f"{self.cooldown}s", True, YELLOW)
             screen.blit(cooldown_text, (self.rect.right + 5, self.rect.top + 5))
 
-        def is_clicked(self, pos):
-            return self.rect.collidepoint(pos) and self.active
+    def is_clicked(self, pos):
+        return self.rect.collidepoint(pos) and self.active
 
-        def update(self):
-            if self.cooldown > 0:
-                self.cooldown -= 1/FPS
-                self.active = False
-            else:
-                self.active = True
-                self.cooldown = 0
+    def update(self):
+        if self.cooldown > 0:
+            self.cooldown -= 1/FPS
+            self.active = False
+        else:
+            self.active = True
+            self.cooldown = 0
 
 class Guard:
     def __init__(self, patrol_id, patrol_time):
@@ -208,7 +208,7 @@ class StealthGame:
         for button in self.buttons.values():
             button.update()
         
-        if self.camera_diable_time > 0:
+        if self.camera_disable_time > 0:
             self.camera_disable_time -= dt
         else:
             self.camera_disabled = False
@@ -221,7 +221,7 @@ class StealthGame:
         for guard in self.guards:
             guard.update(dt)
         
-        base_detection = 2 * dict
+        base_detection = 2 * dt
         if self.camera_disabled:
             base_detection *= 0.3
         if self.lights_disabled:
@@ -296,7 +296,7 @@ class StealthGame:
             self.screen.blit(text, text_rect)
             y += 40
 
-        self.buttons['menu'].draw(self.screen)
+        self.buttons['menu'].draw(self.screen, self.font)
 
     def draw_game(self):
         title = self.title_font.render("SECURITY TERMINAL", True, GREEN)
@@ -308,17 +308,17 @@ class StealthGame:
         obj_text = self.font.render(f"Objectives: {self.objective_progress}/{self.objectives_needed}", True, GREEN)
         self.screen.blit(obj_text, (WIDTH//2 - obj_text.get_width()//2, 90))
 
-        monitor-Y = 150
+        monitor_y = 150
         for i, guard in enumerate(self.guards):
             guard.draw(self.screen, 100, monitor_y + i * 60, 800, 40)
 
         status_y = 350
         systems = [
-            ("CAMERAS", "OFFLINE" if self.camera_disabled else "ONLINE", GREEN if self.camera_disabled else RED)
+            ("CAMERAS", "OFFLINE" if self.camera_disabled else "ONLINE", GREEN if self.camera_disabled else RED),
             ("LIGHTS", "OFFLINE" if self.lights_disabled else "ONLINE", GREEN if self.lights_disabled else RED)
         ]
 
-        for i, (name, statis, color) in enumerate(systems):
+        for i, (name, status, color) in enumerate(systems):
             text = self.small_font.render(f"{name}: {status}", True, color)
             self.screen.blit(text, (100 + i * 250, status_y))
 
@@ -338,7 +338,7 @@ class StealthGame:
         fill_width = int((value / max_value) * width)
         pygame.draw.rect(self.screen, color, (x, y, fill_width, height))
 
-        pyagame.draw.rect(self.screen, WHITE, (x, y, width, height), 2)
+        pygame.draw.rect(self.screen, WHITE, (x, y, width, height), 2)
 
         value_text = self.small_font.render(f"{int(value)}/{max_value}", True, WHITE)
         self.screen.blit(value_text, (x + width//2 - value_text.get_width()//2, y + height//2 - value_text.get_height()//2))
