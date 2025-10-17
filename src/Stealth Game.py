@@ -86,11 +86,11 @@ class Guard:
         self.position = (self.current_time % self.patrol_time) / self.patrol_time
 
         # update animation
-        anim = self.animation_set.get(self.current_anim_name) if self.current_anime_name else None
+        anim = self.animation_set.get(self.current_anim_name) if self.current_anim_name else None
         if anim:
             # set alert animation
             if self.alert and "alert" in self.animation_set and self.current_anim_name != "alert":
-                anime = self.animation_set["alert"]
+                anim = self.animation_set["alert"]
                 self.current_anim_name = "alert"
             elif not self.alert and self.current_anim_name == "alert" and "idle" in self.animation_set:
                 self.current_anim_name = "idle"
@@ -151,10 +151,6 @@ class StealthGame:
         self.event_interval = 5
         self.current_event = None
 
-        self.event_timer = 0
-        self.event_interval = 5
-        self.current_event = None
-
         # Initialize background video
         self.init_background()
     
@@ -187,9 +183,17 @@ class StealthGame:
             anims = {}
             for name, params in info['animations'].items():
                 try:
-                    anim_master.add_animation(name, params['row'], params['start_col'], params['num_frames'], params['speed'], loop=True)
+                    anim_master.add_animation(
+                        name,
+                        params['row'],
+                        params.get('start_col', 0),
+                        params['num_frames'],
+                        speed=params.get('speed', 0.1),
+                        loop=params.get('loop', True)
+                    )
+                    anims[name] = anim_master
                 except Exception as e:
-                    print(f"load_guard_animations: failed to add animation {name} from {sheet}: {e}")
+                    print(f"load_guard_animations: failed to add animation {name}: {e}")
             self.guard_animation_sets[key] = anims
         
         for guard in self.guards:
