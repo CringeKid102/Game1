@@ -4,6 +4,7 @@ import math
 import os
 import cv2
 import numpy as np
+from animation import Animation
 
 # Initialize Pygame
 pygame.init()
@@ -67,16 +68,34 @@ class Button:
             self.cooldown = 0
 
 class Guard:
-    def __init__(self, patrol_id, patrol_time):
+    def __init__(self, patrol_id, patrol_time, animation_set: dict = None, default_anim: str = "idle"):
         self.id = patrol_id
         self.patrol_time = patrol_time
         self.current_time = 0
         self.position = 0
         self.alert = False
 
+        # animation_set
+        self.animation_set = animation_set or {}
+        self.current_anim_name = default_anim if default_anim in self.animation_set else None
+        self.anim_offset_x = 0
+        self.anim_offset_y = 0
+
     def update(self, dt):
         self.current_time += dt
         self.position = (self.current_time % self.patrol_time) / self.patrol_time
+
+        # update animation
+        anim = self.animation_set.get(self.current_anim_name) if self.current_anime_name else None
+        if anim:
+            # set alert animation
+            if self.alert and "alert" in self.animation_set and self.current_anim_name != "alert":
+                anime = self.animation_set["alert"]
+                self.current_anim_name = "alert"
+            elif not self.alert and self.current_anim_name == "alert" and "idle" in self.animation_set:
+                self.current_anim_name = "idle"
+                anim = self.animation_set["idle"]
+            anim.update(dt)
     
     def draw(self, screen, x, y, width, height):
         route_rect = pygame.Rect(x, y, width, height)
@@ -84,8 +103,12 @@ class Guard:
         pygame.draw.rect(screen, WHITE, route_rect, 1)
 
         guard_x = x + int(self.position * width)
-        guard_color = RED if self.alert else BLUE
-        pygame.draw.circle(screen, guard_color, (guard_x, y + height // 2), 8)
+        anim = self.animation_set.get(self.current_anim_name) if self.current_anim_name else None
+        if anim:
+            anim.draw(screen, guard_x + self.anim_offset_x, y + height//2 + self.anim_offset_y, anchor="center")
+        else:
+            guard_color = RED if self.alert else BLUE
+            pygame.draw.circle(screen, guard_color, (guard_x, y + height//2), height//3)
 
         font = pygame.font.Font(None, 20)
         label = font.render(f"Guard {self.id}", True, WHITE)
@@ -115,6 +138,7 @@ class StealthGame:
             Guard(2, 12),
             Guard(3, 10)
         ]
+        self.load_guard_animations()
 
         self.create_buttons()
 
@@ -133,6 +157,45 @@ class StealthGame:
 
         # Initialize background video
         self.init_background()
+    
+    def load_guard_animations(self):
+        base = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "assets", "sprites"))
+        guard_anim_config = {
+            'default_guard': {
+                'sheet': os.path.join(base, "guard_sheet.png"),
+                'frame_width': 32,
+                'frame_height': 48,
+                'scale': 1.0,
+                'animations': {
+                    'idle': {'row': 0, 'start_col': 0, 'num_frames': 4, 'speed': 0.2, 'loop': True},
+                    'walk': {'row': 1, 'start_col': 0, 'num_frames': 6, 'speed': 0.1, 'loop': True},
+                    'alert': {'row': 2, 'start_col': 0, 'num_frames': 4, 'speed': 0.15, 'loop': True}
+                },
+            }
+        }
+
+        self.guard_animation_sets = {}
+        for key, info in guard_anim_config.items():
+            sheet = info['sheet']
+            try:
+                anim_master = Animation(sheet, info['frame_width'], info['frame_height'], scale=info.get('scale', 1.0))
+            except Exception as e:
+                print(f"Error loading animation sheet {sheet}: {e}")
+                self.guard_animation_sets[key] = {}
+                continue
+
+            anims = {}
+            for name, params in info['animations'].items():
+                try:
+                    anim_master.add_animation(name, params['row'], params['start_col'], params['num_frames'], params['speed'], loop=True)
+                except Exception as e:
+                    print(f"load_guard_animations: failed to add animation {name} from {sheet}: {e}")
+            self.guard_animation_sets[key] = anims
+        
+        for guard in self.guards:
+            guard.animation_set = self.guard_animation_sets.get('default_guard', {})
+            if 'idle' in guard.animation_set:
+                guard.current_anim_name = 'idle'
     
     def init_background(self):
         self.bg_path = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "assets", "videos", "hacking bg.mp4"))
