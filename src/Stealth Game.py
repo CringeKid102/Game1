@@ -33,25 +33,36 @@ class Button:
         self.hover_color = hover_color
         self.active = True
         self.cooldown = 0
+        self.hover_t = 0.0
+        self.scale_t = 1.0
+        self.press_timer = 0.0
+        self.press_duration = 0.12
     
     def draw(self, screen, font):
-        mouse_pos = pygame.mouse.get_pos()
-        is_hover = self.rect.collidepoint(mouse_pos) and self.active
-
-        color = self.hover_color if is_hover else self.color
+        draw_color = self.color
         if not self.active:
-            color = GRAY
+            draw_color = GRAY
+        else:
+            draw_color = tuple(
+                int(self.color[i] + (self.hover_color[i] - self.color[i]) * self.hover_t)
+                for i in range(3)
+            )
+        
+        w = int(self.rect.width * self.scale_t)
+        h = int(self.rect.height * self.scale_t)
+        scaled_rect = pygame.Rect(0, 0, w, h)
+        scaled_rect.center = self.rect.center
 
-        pygame.draw.rect(screen, color, self.rect)
-        pygame.draw.rect(screen, WHITE, self.rect, 2)
+        pygame.draw.rect(screen, draw_color, scaled_rect, border_radius=6)
+        pygame.draw.rect(screen, WHITE, scaled_rect, 2, border_radius=6)
 
         text_surf = font.render(self.text, True, WHITE)
-        text_rect = text_surf.get_rect(center=self.rect.center)
+        text_rect = text_surf.get_rect(center=scaled_rect.center)
         screen.blit(text_surf, text_rect)
 
         if self.cooldown > 0:
             cooldown_text = font.render(f"{int(math.ceil(self.cooldown))}s", True, YELLOW)
-            screen.blit(cooldown_text, (self.rect.right + 5, self.rect.top + 5))
+            screen.blit(cooldown_text, (scaled_rect.right + 5, scaled_rect.top + 5))
 
     def is_clicked(self, pos):
         return self.rect.collidepoint(pos) and self.active
@@ -66,6 +77,28 @@ class Button:
         else:
             self.active = True
             self.cooldown = 0
+        
+        mouse_pos = pygame.mouse.get_pos()
+        is_hover = self.rect.collidepoint(mouse_pos) and self.active
+        target = 1.0 if is_hover else 0.0
+        lerp_speed = dt / 0.13 if 0.12 > 0 else 1.0
+        self.hover_t += (target - self.hover_t) * min(1.0, lerp_speed)
+
+        if self.press_timer > 0:
+            self.press_timer = max(0.0, self.press_timer - dt)
+        hover_scale = 1.0 + 0.05 * self.hover_t
+        if self.press_timer > 0:
+            target_scale =  hover_scale * 0.92
+        else:
+            target_scale = hover_scale
+        self.scale_t += (target_scale - self.scale_t) * min(1.0, dt / 0.08)
+
+    def press(self):
+        """
+        Call when button is activated to play press animation.
+        """
+        self.press_timer = self.press_duration
+        self.scale_t = max(0.0, self.scale_t * 0.92)
 
 class Guard:
     def __init__(self, patrol_id, patrol_time, animation_set: dict = None, default_anim: str = "idle"):
@@ -154,7 +187,11 @@ class StealthGame:
         # Initialize background video
         self.init_background()
         
+        # messages to show feedback to player
         self.feedback_messages = []
+
+        # UI animation timer used for pulsing effects
+        self.ui_time = 0.0
     
     def load_guard_animations(self):
         base = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "assets", "sprites"))
@@ -289,24 +326,28 @@ class StealthGame:
         
     def handle_game_clicks(self, pos):
         if self.buttons['camera'].is_clicked(pos):
+            self.buttons['camera'].press()
             self.camera_disabled = True
             self.camera_disable_time = 8
             self.buttons['camera'].cooldown = 7
             self.detection_level = max(0, self.detection_level - 15)
 
         elif self.buttons['lights'].is_clicked(pos):
+            self.buttons['lights'].press()
             self.lights_disabled = True
             self.lights_disable_time = 6
             self.buttons['lights'].cooldown = 5
             self.detection_level = max(0, self.detection_level - 10)
         
         elif self.buttons['distract'].is_clicked(pos):
+            self.buttons['distract'].press()
             for guard in self.guards:
                 guard.alert = False
             self.detection_level = max(0, self.detection_level - 20)
             self.buttons['distract'].cooldown = 10
         
         elif self.buttons['hack'].is_clicked(pos):
+            self.buttons['hack'].press()
             success_chance = max(0.15, 1.0 - (self.detection_level / 80.0))
             if random.random() < success_chance:
                 self.objective_progress += 1
@@ -324,6 +365,8 @@ class StealthGame:
             return
 
         self.time_remaining -= dt
+        # advance UI timer for pulsing effects
+        self.ui_time += dt
 
         for button in self.buttons.values():
             button.update(dt)
@@ -484,7 +527,32 @@ class StealthGame:
         else:
             fill_width = int((value / max_value) * width)
         fill_width = max(0, min(fill_width, width))
-        pygame.draw.rect(self.screen, color, (x, y, fill_width, height))
+        # pulsing effect for detection bar when high
+        draw_color = color
+        if max_value > 0:
+            if label == "DETECTION":
+                ratio = value / max_value
+                if ratio >= 0.6:
+                    # pulse period around 0.6s, amplitude small
+                    period = 0.6
+                    pulse = 0.5 * (1.0 + math.sin(2 * math.pi * (self.ui_time / period)))
+                    amp = 0.45
+                    draw_color = tuple(
+                        min(255, int(c + (255 - c) * pulse * amp))
+                        for c in color
+                    )
+            elif label == "TIME":
+                ratio = value / max_value
+                if ratio <= 0.3:
+                    period = 0.6
+                    pulse = 0.5 * (1.0 + math.sin(2 * math.pi * (self.ui_time / period)))
+                    amp = 0.45
+                    target = (355, 200, 40)
+                    draw_color = tuple(
+                        min(255, int(c + (t - c) * pulse * amp))
+                        for c, t in zip(color, target)
+                    )
+        pygame.draw.rect(self.screen, draw_color, (x, y, fill_width, height))
 
         pygame.draw.rect(self.screen, WHITE, (x, y, width, height), 2)
 
