@@ -153,6 +153,8 @@ class StealthGame:
 
         # Initialize background video
         self.init_background()
+        
+        self.feedback_messages = []
     
     def load_guard_animations(self):
         base = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "assets", "sprites"))
@@ -305,13 +307,18 @@ class StealthGame:
             self.buttons['distract'].cooldown = 10
         
         elif self.buttons['hack'].is_clicked(pos):
-            if self.detection_level < 30:
+            success_chance = max(0.15, 1.0 - (self.detection_level / 80.0))
+            if random.random() < success_chance:
                 self.objective_progress += 1
-                self.buttons['hack'].cooldown = 3
+                self.detection_level = max(0, self.detection_level - 5)
+                self.buttons['hack'].cooldown = 2.0
+                self.feedback_messages.append({'text': "HACK SUCCESSFUL", 'color': GREEN, 'time': 2.5})
             else:
-                self.detection_level += 15
-                self.buttons['hack'].cooldown = 5
-    
+                penalty = min(20, int(8 + self.detection_level * 0.05))
+                self.detection_level += penalty
+                self.buttons['hack'].cooldown = 3.5
+                self.feedback_messages.append({'text': "HACK FAILED", 'color': RED, 'time': 2.5})
+
     def update(self, dt):
         if self.state != "playing":
             return
@@ -359,6 +366,11 @@ class StealthGame:
             self.event_timer = 0
             self.trigger_random_event()
         
+        for m in list(self.feedback_messages):
+            m['time'] -= dt
+            if m['time'] <= 0:
+                self.feedback_messages.remove(m)
+
         self.detection_level = max(0, min(self.detection_level, self.max_detection))
         if self.objective_progress >= self.objectives_needed:
             self.state = "success"
@@ -423,6 +435,11 @@ class StealthGame:
 
         obj_text = self.font.render(f"Objectives: {self.objective_progress}/{self.objectives_needed}", True, GREEN)
         self.screen.blit(obj_text, (WIDTH//2 - obj_text.get_width()//2, 90))
+
+        for i, msg in enumerate(self.feedback_messages):
+            txt = self.font.render(msg['text'], True, msg['color'])
+            txt_rect = txt.get_rect(center=(WIDTH//2, 130 + i * 30))
+            self.screen.blit(txt, txt_rect)
 
         monitor_y = 150
         for i, guard in enumerate(self.guards):
