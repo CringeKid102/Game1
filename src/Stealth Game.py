@@ -366,6 +366,14 @@ class StealthGame:
             self.event_timer = 0
             self.trigger_random_event()
         
+        if isinstance(self.current_event, dict):
+            dps = self.current_event.get('dps', 0)
+            if dps:
+                self.detection_level += dps * dt
+            self.current_event['time_left'] -= dt
+            if self.current_event['time_left'] <= 0:
+                self.current_event = None
+        
         for m in list(self.feedback_messages):
             m['time'] -= dt
             if m['time'] <= 0:
@@ -379,13 +387,15 @@ class StealthGame:
         
     def trigger_random_event(self):
         events = [
-            "Security sweep initiated",
-            "Guard shift change",
-            "System scan detected",
-            "Patrol route adjusted"
-        ]
-        self.current_event = random.choice(events)
-        self.detection_level += random.randint(5, 15)
+            {'text': "Security sweep initiated", 'duration': 6.0, 'instant': random.randint(5, 12), 'dps': 1.0},
+            {'text': "Guard shift change", 'duration': 8.0, 'instant': 0, 'dps': 0.5},
+            {'text': "System scan detected", 'duration': 5.0, 'instant': random.randint(8, 16), 'dps': 1.5},
+            {'text': "Patrol route adjusted", 'duration': 10.0, 'instant': 0, 'dps': 0.3},
+            ]
+        ev = random.choice(events)
+        self.detection_level += ev.get('insant', 0)
+        ev['time_left'] = ev['duration']
+        self.current_event = ev
     
     def draw(self):
         if self.bg_frame_surf:
@@ -456,9 +466,10 @@ class StealthGame:
             self.screen.blit(text, (100 + i * 250, status_y))
 
         if self.current_event:
-            event_text = self.small_font.render(f"! {self.current_event}", True, YELLOW)
+            ev_text = self.current_event['text'] if isinstance(self.current_event, dict) else str(self.current_event)
+            event_text = self.small_font.render(f"! {ev_text}", True, YELLOW)
             self.screen.blit(event_text, (WIDTH//2 - event_text.get_width()//2, 390))
-        
+
         for key in ['camera', 'lights', 'distract', 'hack']:
             self.buttons[key].draw(self.screen, self.small_font)
         
